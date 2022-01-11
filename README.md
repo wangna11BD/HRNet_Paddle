@@ -125,7 +125,7 @@ python tools/infer.py -c configs/dark_hrnet_w32_256x192.yml --infer_img=dataset/
 COCO Dataset
 | Model              | Input Size | AP(coco val) |                           Model Download                           | Config File                                                    |
 | :---------------- | -------- | :----------: | :----------------------------------------------------------: | ----------------------------------------------------------- |
-| HRNet-w32             | 256x192  |     77.8     | [hrnet_w32_256x192.pdparams](https://paddledet.bj.bcebos.com/models/keypoint/hrnet_w32_256x192.pdparams) | [config](./hrnet/hrnet_w32_256x192.yml)                     |
+| HRNet-w32             | 256x192  |     77.8     | [hrnet_w32_256x192.pdparams](https://paddledet.bj.bcebos.com/models/keypoint/hrnet_w32_256x192.pdparams) | [config](./configs/hrnet_w32_256x192.yml)                     |
 
 ## Citation
 ````
