@@ -13,7 +13,13 @@
 # limitations under the License.
 
 from . import hrnet
+from . import keypoint_hrnet
+from . import loss
 
 from .hrnet import *
+from .keypoint_hrnet import *
+from .loss import *
 
-__all__ = hrnet.__all__ 
+__all__ = hrnet.__all__ + keypoint_hrnet.__all__ \
+          + loss.__all__
+

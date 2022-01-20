@@ -28,29 +28,8 @@ logger = setup_logger('hrnet')
 
 # Global dictionary
 TRT_MIN_SUBGRAPH = {
-    'YOLO': 3,
-    'SSD': 60,
-    'RCNN': 40,
-    'RetinaNet': 40,
-    'S2ANet': 80,
-    'EfficientDet': 40,
-    'Face': 3,
-    'TTFNet': 60,
-    'FCOS': 16,
-    'SOLOv2': 60,
-    'HigherHRNet': 3,
     'HRNet': 3,
-    'DeepSORT': 3,
-    'JDE': 10,
-    'FairMOT': 5,
-    'GFL': 16,
-    'PicoDet': 3,
-    'CenterNet': 5,
 }
-
-KEYPOINT_ARCH = ['HigherHRNet', 'TopDownHRNet']
-MOT_ARCH = ['DeepSORT', 'JDE', 'FairMOT']
-
 
 def _prune_input_spec(input_spec, program, targets):
     # try to prune static program to figure out pruned input spec
@@ -91,17 +70,6 @@ def _parse_reader(reader_cfg, dataset_cfg, metric, arch, image_shape):
                 continue
             p.update(value)
             preprocess_list.append(p)
-    batch_transforms = reader_cfg.get('batch_transforms', None)
-    if batch_transforms:
-        for bt in batch_transforms:
-            for key, value in bt.items():
-                # for deploy/infer, use PadStride(stride) instead PadBatch(pad_to_stride)
-                if key == 'PadBatch':
-                    preprocess_list.append({
-                        'type': 'PadStride',
-                        'stride': value['pad_to_stride']
-                    })
-                    break
 
     return preprocess_list, label_list
 
@@ -115,7 +83,8 @@ def _parse_tracker(tracker_cfg):
 
 def _dump_infer_config(config, path, image_shape, model):
     arch_state = False
-    from ppdet.core.config.yaml_helpers import setup_orderdict
+    from lib.utils.config.yaml_helpers import setup_orderdict
+    
     setup_orderdict()
     use_dynamic_shape = True if image_shape[2] == -1 else False
     infer_cfg = OrderedDict({
@@ -125,13 +94,6 @@ def _dump_infer_config(config, path, image_shape, model):
         'use_dynamic_shape': use_dynamic_shape
     })
     infer_arch = config['architecture']
-
-    if infer_arch in MOT_ARCH:
-        if infer_arch == 'DeepSORT':
-            tracker_cfg = config['DeepSORTTracker']
-        else:
-            tracker_cfg = config['JDETracker']
-        infer_cfg['tracker'] = _parse_tracker(tracker_cfg)
 
     for arch, min_subgraph_size in TRT_MIN_SUBGRAPH.items():
         if arch in infer_arch:
@@ -145,31 +107,13 @@ def _dump_infer_config(config, path, image_shape, model):
             format(infer_arch) +
             'Please set TRT_MIN_SUBGRAPH in ppdet/engine/export_utils.py')
         os._exit(0)
-    if 'mask_head' in config[config['architecture']] and config[config[
-            'architecture']]['mask_head']:
-        infer_cfg['mask'] = True
-    label_arch = 'detection_arch'
-    if infer_arch in KEYPOINT_ARCH:
-        label_arch = 'keypoint_arch'
+    label_arch = 'keypoint_arch'
 
-    if infer_arch in MOT_ARCH:
-        label_arch = 'mot_arch'
-        reader_cfg = config['TestMOTReader']
-        dataset_cfg = config['TestMOTDataset']
-    else:
-        reader_cfg = config['TestReader']
-        dataset_cfg = config['TestDataset']
+    reader_cfg = config['TestReader']
+    dataset_cfg = config['TestDataset']
 
     infer_cfg['Preprocess'], infer_cfg['label_list'] = _parse_reader(
         reader_cfg, dataset_cfg, config['metric'], label_arch, image_shape[1:])
-
-    if infer_arch == 'PicoDet':
-        infer_cfg['NMS'] = config['PicoHead']['nms']
-        # In order to speed up the prediction, the threshold of nms 
-        # is adjusted here, which can be changed in infer_cfg.yml
-        config['PicoHead']['nms']["score_threshold"] = 0.3
-        config['PicoHead']['nms']["nms_threshold"] = 0.5
-        infer_cfg['fpn_stride'] = config['PicoHead']['fpn_stride']
 
     yaml.dump(infer_cfg, open(path, 'w'))
     logger.info("Export inference config file to {}".format(os.path.join(path)))

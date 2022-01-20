@@ -26,6 +26,7 @@ TopDownHRNet:
   num_joints: *num_joints
   width: &width 32
   loss: KeyPointMSELoss
+  use_dark: False
 
 HRNet:
   width: *width
