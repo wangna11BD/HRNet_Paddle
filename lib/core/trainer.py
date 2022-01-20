@@ -30,7 +30,7 @@ import paddle.distributed as dist
 from paddle.distributed import fleet
 from paddle import amp
 from paddle.static import InputSpec
-from ppdet.optimizer import ModelEMA
+from lib.core.optimizer import ModelEMA
 
 from lib.utils.workspace import create
 from lib.utils.checkpoint import load_weight, load_pretrain_weight
@@ -40,10 +40,10 @@ from lib.metrics import KeyPointTopDownCOCOEval
 from lib.dataset.category import get_categories
 import lib.utils.stats as stats
 
-from .callbacks import Callback, ComposeCallback, LogPrinter, Checkpointer, WiferFaceEval, VisualDLWriter, SniperProposalsGenerator
+from .callbacks import Callback, ComposeCallback, LogPrinter, Checkpointer, WiferFaceEval, VisualDLWriter
 from .export_utils import _dump_infer_config, _prune_input_spec
 
-from ppdet.utils.logger import setup_logger
+from lib.utils.logger import setup_logger
 logger = setup_logger('ppdet.engine')
 
 __all__ = ['Trainer']
@@ -123,8 +123,6 @@ class Trainer(object):
             self._callbacks = [LogPrinter(self), Checkpointer(self)]
             if self.cfg.get('use_vdl', False):
                 self._callbacks.append(VisualDLWriter(self))
-            if self.cfg.get('save_proposals', False):
-                self._callbacks.append(SniperProposalsGenerator(self))
             self._compose_callback = ComposeCallback(self._callbacks)
         elif self.mode == 'eval':
             self._callbacks = [LogPrinter(self)]
@@ -407,10 +405,6 @@ class Trainer(object):
                 end = start + bbox_num[i]
                 bbox_res = batch_res['bbox'][start:end] \
                         if 'bbox' in batch_res else None
-                mask_res = batch_res['mask'][start:end] \
-                        if 'mask' in batch_res else None
-                segm_res = batch_res['segm'][start:end] \
-                        if 'segm' in batch_res else None
                 keypoint_res = batch_res['keypoint'][start:end] \
                         if 'keypoint' in batch_res else None
                 image = visualize_results(

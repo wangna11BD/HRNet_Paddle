@@ -13,16 +13,12 @@
 # limitations under the License.
 
 from . import callbacks
-from . import keypoint_hrnet
-from . import loss
 from . import optimizer
 from . import trainer
 
 from .callbacks import *
-from .keypoint_hrnet import *
-from .loss import *
 from .optimizer import *
 from .trainer import *
 
-__all__ = callbacks.__all__ + keypoint_hrnet.__all__ \
-          + loss.__all__ + optimizer.__all__ + trainer.__all__
+__all__ = callbacks.__all__ \
+          + optimizer.__all__ + trainer.__all__
