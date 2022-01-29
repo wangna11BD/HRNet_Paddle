@@ -40,7 +40,7 @@ from lib.metrics import KeyPointTopDownCOCOEval
 from lib.dataset.category import get_categories
 import lib.utils.stats as stats
 
-from .callbacks import Callback, ComposeCallback, LogPrinter, Checkpointer, WiferFaceEval, VisualDLWriter
+from .callbacks import Callback, ComposeCallback, LogPrinter, Checkpointer, VisualDLWriter
 from .export_utils import _dump_infer_config, _prune_input_spec
 
 from lib.utils.logger import setup_logger
@@ -408,7 +408,7 @@ class Trainer(object):
                 keypoint_res = batch_res['keypoint'][start:end] \
                         if 'keypoint' in batch_res else None
                 image = visualize_results(
-                    image, bbox_res, mask_res, segm_res, keypoint_res,
+                    image, bbox_res, keypoint_res,
                     int(im_id), catid2name, draw_threshold)
                 self.status['result_image'] = np.array(image.copy())
                 if self._compose_callback:
