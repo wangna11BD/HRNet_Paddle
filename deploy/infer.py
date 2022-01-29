@@ -30,7 +30,6 @@ from postprocess import HRNetPostProcess
 from visualize import draw_pose 
 from utils import argsparser, Timer, get_current_memory_mb
 
-# Global dictionary
 
 class Detector(object):
     """
