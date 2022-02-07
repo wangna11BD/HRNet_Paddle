@@ -18,7 +18,6 @@ from __future__ import print_function
 
 import os
 
-from .voc import pascalvoc_label
 from lib.utils.logger import setup_logger
 logger = setup_logger(__name__)
 
@@ -31,94 +30,15 @@ def get_categories(metric_type, anno_file=None, arch=None):
     to category name map from annotation file.
 
     Args:
-        metric_type (str): metric type, currently support 'coco', 'voc', 'oid'.
+        metric_type (str): metric type, currently support 'coco'.
         anno_file (str): annotation file path
     """
     if arch == 'keypoint_arch':
         return (None, {'id': 'keypoint'})
 
-    if metric_type.lower() == 'coco' or metric_type.lower(
-    ) == 'rbox' or metric_type.lower() == 'snipercoco':
-        if anno_file and os.path.isfile(anno_file):
-            # lazy import pycocotools here
-            from pycocotools.coco import COCO
-
-            coco = COCO(anno_file)
-            cats = coco.loadCats(coco.getCatIds())
-
-            clsid2catid = {i: cat['id'] for i, cat in enumerate(cats)}
-            catid2name = {cat['id']: cat['name'] for cat in cats}
-            return clsid2catid, catid2name
-
-        # anno file not exist, load default categories of COCO17
-        else:
-            if metric_type.lower() == 'rbox':
-                return _dota_category()
-
-            return _coco17_category()
-
-    elif metric_type.lower() == 'voc':
-        if anno_file and os.path.isfile(anno_file):
-            cats = []
-            with open(anno_file) as f:
-                for line in f.readlines():
-                    cats.append(line.strip())
-
-            if cats[0] == 'background':
-                cats = cats[1:]
-
-            clsid2catid = {i: i for i in range(len(cats))}
-            catid2name = {i: name for i, name in enumerate(cats)}
-
-            return clsid2catid, catid2name
-
-        # anno file not exist, load default categories of
-        # VOC all 20 categories
-        else:
-            return _vocall_category()
-
-    elif metric_type.lower() == 'oid':
-        if anno_file and os.path.isfile(anno_file):
-            logger.warning("only default categories support for OID19")
-        return _oid19_category()
-
-    elif metric_type.lower() == 'keypointtopdowncocoeval' or metric_type.lower(
+    if metric_type.lower() == 'keypointtopdowncocoeval' or metric_type.lower(
     ) == 'keypointtopdownmpiieval':
         return (None, {'id': 'keypoint'})
-
-    elif metric_type.lower() in ['mot', 'motdet', 'reid']:
-        if anno_file and os.path.isfile(anno_file):
-            cats = []
-            with open(anno_file) as f:
-                for line in f.readlines():
-                    cats.append(line.strip())
-            if cats[0] == 'background':
-                cats = cats[1:]
-            clsid2catid = {i: i for i in range(len(cats))}
-            catid2name = {i: name for i, name in enumerate(cats)}
-            return clsid2catid, catid2name
-        # anno file not exist, load default category 'pedestrian'.
-        else:
-            return _mot_category(category='pedestrian')
-
-    elif metric_type.lower() in ['kitti', 'bdd100kmot']:
-        return _mot_category(category='vehicle')
-
-    elif metric_type.lower() in ['mcmot']:
-        if anno_file and os.path.isfile(anno_file):
-            cats = []
-            with open(anno_file) as f:
-                for line in f.readlines():
-                    cats.append(line.strip())
-            if cats[0] == 'background':
-                cats = cats[1:]
-            clsid2catid = {i: i for i in range(len(cats))}
-            catid2name = {i: name for i, name in enumerate(cats)}
-            return clsid2catid, catid2name
-        # anno file not exist, load default categories of visdrone all 10 categories
-        else:
-            return _visdrone_category()
-
     else:
         raise ValueError("unknown metric type {}".format(metric_type))
 
@@ -343,23 +263,6 @@ def _dota_category():
     catid2name.pop(0)
     clsid2catid = {i: i + 1 for i in range(len(catid2name))}
     return clsid2catid, catid2name
-
-
-def _vocall_category():
-    """
-    Get class id to category id map and category id
-    to category name map of mixup voc dataset
-
-    """
-    label_map = pascalvoc_label()
-    label_map = sorted(label_map.items(), key=lambda x: x[1])
-    cats = [l[0] for l in label_map]
-
-    clsid2catid = {i: i for i in range(len(cats))}
-    catid2name = {i: name for i, name in enumerate(cats)}
-
-    return clsid2catid, catid2name
-
 
 
 def _oid19_category():

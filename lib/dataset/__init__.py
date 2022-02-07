@@ -16,7 +16,6 @@ from . import category
 from . import dataset
 from . import keypoint_coco
 from . import reader
-from . import voc
 from . import transform
 
 
@@ -24,8 +23,7 @@ from .category import *
 from .dataset import *
 from .keypoint_coco import *
 from .reader import *
-from .voc import *
 from .transform import *
 
 __all__ = category.__all__ + dataset.__all__ + keypoint_coco.__all__ \
-          + reader.__all__  + voc.__all__ + transform.__all__
+          + reader.__all__  + transform.__all__
