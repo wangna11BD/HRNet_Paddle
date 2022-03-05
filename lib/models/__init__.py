@@ -17,6 +17,7 @@ from . import keypoint_hrnet
 from . import loss
 
 from .hrnet import *
+from .mobilenet_v3 import *
 from .keypoint_hrnet import *
 from .loss import *
 

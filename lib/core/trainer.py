@@ -30,7 +30,6 @@ import paddle.distributed as dist
 from paddle.distributed import fleet
 from paddle import amp
 from paddle.static import InputSpec
-from lib.core.optimizer import ModelEMA
 
 from lib.utils.workspace import create
 from lib.utils.checkpoint import load_weight, load_pretrain_weight
@@ -73,16 +72,6 @@ class Trainer(object):
 
         #normalize params for deploy
         self.model.load_meanstd(cfg['TestReader']['sample_transforms'])
-
-        self.use_ema = ('use_ema' in cfg and cfg['use_ema'])
-        if self.use_ema:
-            ema_decay = self.cfg.get('ema_decay', 0.9998)
-            cycle_epoch = self.cfg.get('cycle_epoch', -1)
-            self.ema = ModelEMA(
-                self.model,
-                decay=ema_decay,
-                use_thres_step=True,
-                cycle_epoch=cycle_epoch)
 
         # EvalDataset build with BatchSampler to evaluate in single device
         # TODO: multi-device evaluate
@@ -277,14 +266,8 @@ class Trainer(object):
 
                 self.status['batch_time'].update(time.time() - iter_tic)
                 self._compose_callback.on_step_end(self.status)
-                if self.use_ema:
-                    self.ema.update(self.model)
                 iter_tic = time.time()
 
-            # apply ema weight on model
-            if self.use_ema:
-                weight = copy.deepcopy(self.model.state_dict())
-                self.model.set_dict(self.ema.apply())
             if self.cfg.get('unstructured_prune'):
                 self.pruner.update_params()
 
@@ -313,10 +296,6 @@ class Trainer(object):
                 with paddle.no_grad():
                     self.status['save_best_model'] = True
                     self._eval_with_loader(self._eval_loader)
-
-            # restore origin weight on model
-            if self.use_ema:
-                self.model.set_dict(weight)
 
         self._compose_callback.on_train_end(self.status)
 
