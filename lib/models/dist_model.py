@@ -19,109 +19,39 @@ from __future__ import print_function
 import paddle
 import paddle.nn as nn
 from paddle.nn.initializer import Normal, Constant
+import copy
 import numpy as np
 import math
 import cv2
-from ..utils.keypoint_utils import transform_preds
-from ..utils.workspace import register, create
 
-__all__ = ['TopDownHRNet']
+from lib.utils.keypoint_utils import transform_preds
+from lib.utils.workspace import register, create
+from lib.models.keypoint_hrnet import BaseArch, Conv2d
+from lib.models.hrnet import HRNet
+from lib.models.mobilenet_v3 import MobileNetV3
+from lib.models.loss import DistMSELoss
 
-class BaseArch(nn.Layer):
-    def __init__(self):
-        super(BaseArch, self).__init__()
-        self.inputs = {}
-        self.fuse_norm = False
-
-    def load_meanstd(self, cfg_transform):
-        self.scale = 1.
-        self.mean = paddle.to_tensor([0.485, 0.456, 0.406]).reshape(
-            (1, 3, 1, 1))
-        self.std = paddle.to_tensor([0.229, 0.224, 0.225]).reshape((1, 3, 1, 1))
-        for item in cfg_transform:
-            if 'NormalizeImage' in item:
-                self.mean = paddle.to_tensor(item['NormalizeImage'][
-                    'mean']).reshape((1, 3, 1, 1))
-                self.std = paddle.to_tensor(item['NormalizeImage'][
-                    'std']).reshape((1, 3, 1, 1))
-                if item['NormalizeImage'].get('is_scale', True):
-                    self.scale = 1. / 255.
-                break
-
-    def forward(self, inputs):
-        if self.fuse_norm:
-            image = inputs['image']
-            self.inputs['image'] = (image * self.scale - self.mean) / self.std
-            self.inputs['im_shape'] = inputs['im_shape']
-            self.inputs['scale_factor'] = inputs['scale_factor']
-        else:
-            self.inputs = inputs
-
-        self.model_arch()
-
-        if self.training:
-            out = self.get_loss()
-        else:
-            out = self.get_pred()
-        return out
-
-    def build_inputs(self, data, input_def):
-        inputs = {}
-        for i, k in enumerate(input_def):
-            inputs[k] = data[i]
-        return inputs
-
-    def model_arch(self, ):
-        pass
-
-    def get_loss(self, ):
-        raise NotImplementedError("Should implement get_loss method!")
-
-    def get_pred(self, ):
-        raise NotImplementedError("Should implement get_pred method!")
-
-def Conv2d(in_channels,
-           out_channels,
-           kernel_size,
-           stride=1,
-           padding=0,
-           dilation=1,
-           groups=1,
-           bias=True,
-           weight_init=Normal(std=0.001),
-           bias_init=Constant(0.)):
-    weight_attr = paddle.framework.ParamAttr(initializer=weight_init)
-    if bias:
-        bias_attr = paddle.framework.ParamAttr(initializer=bias_init)
-    else:
-        bias_attr = False
-    conv = nn.Conv2D(
-        in_channels,
-        out_channels,
-        kernel_size,
-        stride,
-        padding,
-        dilation,
-        groups,
-        weight_attr=weight_attr,
-        bias_attr=bias_attr)
-    return conv
+__all__ = ['DistTopDownHRNet']
 
 @register
-class TopDownHRNet(BaseArch):
+class DistTopDownHRNet(BaseArch):
     __category__ = 'architecture'
-    __inject__ = ['loss']
+    __inject__ = ['loss', 'dist_loss']
 
     def __init__(self,
-                 width,
+                 student_width,
+                 teacher_width,
                  num_joints,
-                 backbone='HRNet',
+                 student_backbone='HRNet',
+                 teacher_backbone='HRNet',
                  loss='KeyPointMSELoss',
+                 dist_loss="DistMSELoss",
                  post_process='HRNetPostProcess',
                  flip_perm=None,
                  flip=True,
                  shift_heatmap=True,
-                 use_dark=True):
+                 use_dark=True,
+                 freeze_teacher_params=True):
         """
         HRNet network, see https://arxiv.org/abs/1902.09212
 
@@ -131,40 +61,70 @@ class TopDownHRNet(BaseArch):
             flip_perm (list): The left-right joints exchange order list
             use_dark(bool): Whether to use DARK in post processing
         """
-        super(TopDownHRNet, self).__init__()
-        self.backbone = backbone
+        super().__init__()
+        self.student_backbone = student_backbone
+        self.backbone = teacher_backbone
+        self.student_final_conv = Conv2d(student_width, num_joints, 1, 1, 0, bias=True)
+        self.final_conv = Conv2d(teacher_width, num_joints, 1, 1, 0, bias=True)
+
         self.post_process = HRNetPostProcess(use_dark)
         self.loss = loss
+        self.dist_loss = dist_loss
         self.flip_perm = flip_perm
         self.flip = flip
-        self.final_conv = Conv2d(width, num_joints, 1, 1, 0, bias=True)
         self.shift_heatmap = shift_heatmap
         self.deploy = False
+        
+        if freeze_teacher_params:
+            for param in self.backbone.parameters():
+                param.trainable = False
+            for param in self.final_conv.parameters():
+                param.trainable = False
 
     @classmethod
     def from_config(cls, cfg, *args, **kwargs):
         # backbone
-        backbone = create(cfg['backbone'])
+        arch_config = cfg
 
-        return {'backbone': backbone, }
+        s_backbone_cfg = copy.deepcopy(arch_config["student_backbone"])
+        s_name = s_backbone_cfg.pop("name")
+        s_backbone = eval(s_name)(**s_backbone_cfg)
+
+        t_backbone_cfg = copy.deepcopy(arch_config["teacher_backbone"])
+        t_name = t_backbone_cfg.pop("name")
+        t_backbone = eval(t_name)(**t_backbone_cfg)
+
+        return {'student_backbone': s_backbone, "teacher_backbone": t_backbone}
 
     def _forward(self):
-        feats = self.backbone(self.inputs)
-        hrnet_outputs = self.final_conv(feats[0])
+        feats = self.student_backbone(self.inputs)
+        s_outputs = self.student_final_conv(feats[0])
 
         if self.training:
-            return self.loss(hrnet_outputs, self.inputs)
+            s_loss = self.loss(s_outputs, self.inputs)
+            
+            t_feats = self.backbone(self.inputs)
+            t_outputs = self.final_conv(t_feats[0])
+
+            dist_loss = self.dist_loss({"student_out": s_outputs, "teacher_out": t_outputs}, self.inputs)
+            
+            loss_dict = dict()
+            loss_dict["loss"] = s_loss["loss"] + dist_loss["loss"]
+            loss_dict["loss_student"] = s_loss["loss"]
+            loss_dict["loss_dist"] = dist_loss["loss"]
+            return loss_dict
+            
         elif self.deploy:
-            outshape = hrnet_outputs.shape
+            outshape = s_outputs.shape
             max_idx = paddle.argmax(
-                hrnet_outputs.reshape(
+                s_outputs.reshape(
                     (outshape[0], outshape[1], outshape[2] * outshape[3])),
                 axis=-1)
-            return hrnet_outputs, max_idx
+            return s_outputs, max_idx
         else:
             if self.flip:
                 self.inputs['image'] = self.inputs['image'].flip([3])
-                feats = self.backbone(self.inputs)
+                feats = self.student_backbone(self.inputs)
                 output_flipped = self.final_conv(feats[0])
                 output_flipped = self.flip_back(output_flipped.numpy(),
                                                 self.flip_perm)
@@ -172,14 +132,14 @@ class TopDownHRNet(BaseArch):
                 if self.shift_heatmap:
                     output_flipped[:, :, :, 1:] = output_flipped.clone(
                     )[:, :, :, 0:-1]
-                hrnet_outputs = (hrnet_outputs + output_flipped) * 0.5
+                s_outputs = (s_outputs + output_flipped) * 0.5
             imshape = (self.inputs['im_shape'].numpy()
                        )[:, ::-1] if 'im_shape' in self.inputs else None
             center = self.inputs['center'].numpy(
             ) if 'center' in self.inputs else np.round(imshape / 2.)
             scale = self.inputs['scale'].numpy(
             ) if 'scale' in self.inputs else imshape / 200.
-            outputs = self.post_process(hrnet_outputs, center, scale)
+            outputs = self.post_process(s_outputs, center, scale)
             return outputs
 
     def get_loss(self):

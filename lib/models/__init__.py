@@ -20,6 +20,7 @@ from .hrnet import *
 from .mobilenet_v3 import *
 from .keypoint_hrnet import *
 from .loss import *
+from .dist_model import *
 
 __all__ = hrnet.__all__ + keypoint_hrnet.__all__ \
           + loss.__all__
