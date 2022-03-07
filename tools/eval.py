@@ -130,6 +130,9 @@ def main():
     if 'norm_type' in cfg and cfg['norm_type'] == 'sync_bn' and not cfg.use_gpu:
         cfg['norm_type'] = 'bn'
 
+    if 'slim' in cfg:
+        cfg = build_slim_model(cfg, mode='eval')
+
     check_config(cfg)
     check_gpu(cfg.use_gpu)
     check_npu(cfg.use_npu)
