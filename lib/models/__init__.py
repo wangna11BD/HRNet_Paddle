@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from . import hrnet
+from . import lite_hrnet
 from . import keypoint_hrnet
 from . import loss
 
@@ -21,6 +22,7 @@ from .mobilenet_v3 import *
 from .keypoint_hrnet import *
 from .loss import *
 from .dist_model import *
+from .lite_hrnet import *
 
 __all__ = hrnet.__all__ + keypoint_hrnet.__all__ \
           + loss.__all__
