@@ -35,6 +35,7 @@ from lib.utils.logger import setup_logger
 from lib.utils.cli import ArgsParser
 from lib.utils.check import check_config, check_gpu, check_npu, check_version
 from lib.core.trainer import Trainer
+from lib.slim import build_slim_model
 
 logger = setup_logger('train')
 
@@ -153,6 +154,9 @@ def main():
 
     if 'norm_type' in cfg and cfg['norm_type'] == 'sync_bn' and not cfg.use_gpu:
         cfg['norm_type'] = 'bn'
+    
+    if 'slim' in cfg:
+        cfg = build_slim_model(cfg)
 
     # FIXME: Temporarily solve the priority problem of FLAGS.opt
     merge_config(FLAGS.opt)
