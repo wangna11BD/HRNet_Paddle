@@ -105,18 +105,36 @@ We provides scripts for training, evalution and inference with various features 
 ```bash
 # training on single-GPU
 export CUDA_VISIBLE_DEVICES=0
-python tools/train.py -c configs/dark_hrnet_w32_256x192.yml
+python tools/train.py -c configs/hrnet_w32_256x192.yml
 
 # training on multi-GPU
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
-python -m paddle.distributed.launch --gpus 0,1,2,3,4,5,6,7 tools/train.py -c configs/dark_hrnet_w32_256x192.yml
+python -m paddle.distributed.launch --gpus 0,1,2,3,4,5,6,7 tools/train.py -c configs/hrnet_w32_256x192.yml
 
 # GPU evaluation
 export CUDA_VISIBLE_DEVICES=0
-python tools/eval.py -c configs/dark_hrnet_w32_256x192.yml -o weights=https://paddledet.bj.bcebos.com/models/keypoint/hrnet_w32_256x192.pdparams
+python tools/eval.py -c configs/hrnet_w32_256x192.yml -o weights=https://paddledet.bj.bcebos.com/models/keypoint/hrnet_w32_256x192.pdparams
 
 # Inference
-python tools/infer.py -c configs/dark_hrnet_w32_256x192.yml --infer_img=dataset/test_image/000000397133.jpg -o weights=https://paddledet.bj.bcebos.com/models/keypoint/hrnet_w32_256x192.pdparams
+python tools/infer.py -c configs/hrnet_w32_256x192.yml --infer_img=dataset/test_image/000000397133.jpg -o weights=https://paddledet.bj.bcebos.com/models/keypoint/hrnet_w32_256x192.pdparams
+
+# training with PACT quantization on single-GPU
+export CUDA_VISIBLE_DEVICES=0
+python tools/train.py -c configs/lite_hrnet_30_256x192_coco_pact.yml
+
+# training with PACT quantization on multi-GPU
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+python -m paddle.distributed.launch --gpus 0,1,2,3,4,5,6,7 tools/train.py -c configs/lite_hrnet_30_256x192_coco_pact.yml
+
+# GPU evaluation with PACT quantization
+export CUDA_VISIBLE_DEVICES=0
+python tools/eval.py -c configs/lite_hrnet_30_256x192_coco_pact.yml -o weights=https://paddledet.bj.bcebos.com/models/keypoint/lite_hrnet_30_256x192_coco_pact.pdparams
+
+# Inference with PACT quantization
+python tools/infer.py -c configs/lite_hrnet_30_256x192_coco_pact.yml
+--infer_img=dataset/test_image/000000397133.jpg -o weights=https://paddledet.bj.bcebos.com/models/keypoint/lite_hrnet_30_256x192_coco_pact.pdparams
+
+
 ```
 
 ## 3 Result
@@ -124,6 +142,8 @@ COCO Dataset
 | Model              | Input Size | AP(coco val) |                           Model Download                           | Config File                                                    |
 | :---------------- | -------- | :----------: | :----------------------------------------------------------: | ----------------------------------------------------------- |
 | HRNet-w32             | 256x192  |     76.9     | [hrnet_w32_256x192.pdparams](https://paddledet.bj.bcebos.com/models/keypoint/hrnet_w32_256x192.pdparams) | [config](./configs/hrnet_w32_256x192.yml)                     |
+| LiteHRNet-30          | 256x192  |     69.4     | [lite_hrnet_30_256x192_coco.pdparams](https://bj.bcebos.com/v1/paddledet/models/keypoint/lite_hrnet_30_256x192_coco.pdparams) | [config](./configs/lite_hrnet_30_256x192_coco.yml)                     |
+| LiteHRNet-30-PACT         | 256x192  |     68.9     | [lite_hrnet_30_256x192_coco.pdparams](https://bj.bcebos.com/v1/paddledet/models/keypoint/lite_hrnet_30_256x192_coco_pact.pdparams) | [config](./configs/lite_hrnet_30_256x192_coco_pact.yml)                     |
 
 ![](/dataset/test_image/hrnet_demo.jpg) 
 ![](/deploy/output/hrnet_demo_vis.jpg)

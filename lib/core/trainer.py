@@ -502,7 +502,7 @@ class Trainer(object):
             save_dir)
 
         # save model
-        if 'slim' not in self.cfg or self.cfg['slim_type'] != 'QAT':
+        if 'slim' not in self.cfg:
             paddle.jit.save(
                 static_model,
                 os.path.join(save_dir, 'model'),
