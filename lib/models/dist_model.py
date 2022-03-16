@@ -28,6 +28,7 @@ from lib.utils.keypoint_utils import transform_preds
 from lib.utils.workspace import register, create
 from lib.models.keypoint_hrnet import BaseArch, Conv2d
 from lib.models.hrnet import HRNet
+from lib.models.lite_hrnet import LiteHRNet
 from lib.models.mobilenet_v3 import MobileNetV3
 from lib.models.loss import DistMSELoss
 
@@ -109,7 +110,7 @@ class DistTopDownHRNet(BaseArch):
             dist_loss = self.dist_loss({"student_out": s_outputs, "teacher_out": t_outputs}, self.inputs)
             
             loss_dict = dict()
-            loss_dict["loss"] = s_loss["loss"] + dist_loss["loss"]
+            loss_dict["loss"] = s_loss["loss"] + 0.5 * dist_loss["loss"]
             loss_dict["loss_student"] = s_loss["loss"]
             loss_dict["loss_dist"] = dist_loss["loss"]
             return loss_dict
@@ -125,7 +126,7 @@ class DistTopDownHRNet(BaseArch):
             if self.flip:
                 self.inputs['image'] = self.inputs['image'].flip([3])
                 feats = self.student_backbone(self.inputs)
-                output_flipped = self.final_conv(feats[0])
+                output_flipped = self.student_final_conv(feats[0])
                 output_flipped = self.flip_back(output_flipped.numpy(),
                                                 self.flip_perm)
                 output_flipped = paddle.to_tensor(output_flipped.copy())

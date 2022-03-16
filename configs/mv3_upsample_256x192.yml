@@ -86,7 +86,7 @@ TestDataset:
   !ImageFolder
     anno_path: dataset/coco/keypoint_imagelist.txt
 
-worker_num: 2
+worker_num: 6
 global_mean: &global_mean [0.485, 0.456, 0.406]
 global_std: &global_std [0.229, 0.224, 0.225]
 TrainReader:
