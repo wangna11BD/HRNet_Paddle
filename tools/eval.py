@@ -29,7 +29,7 @@ warnings.filterwarnings('ignore')
 
 import paddle
 
-from lib.utils.workspace import load_config, merge_config
+from lib.utils.workspace import load_config
 from lib.utils.check import check_gpu, check_npu, check_version, check_config
 from lib.utils.cli import ArgsParser
 from lib.core.trainer import Trainer
@@ -48,11 +48,6 @@ def parse_args():
         type=str,
         help="Evaluation directory, default is current directory.")
 
-    parser.add_argument(
-        '--json_eval',
-        action='store_true',
-        default=False,
-        help='Whether to re eval with already exists bbox.json or mask.json')
 
     parser.add_argument(
         "--slim_config",
@@ -82,16 +77,6 @@ def parse_args():
 
 
 def run(FLAGS, cfg):
-    if FLAGS.json_eval:
-        logger.info(
-            "In json_eval mode, PaddleDetection will evaluate json files in "
-            "output_eval directly. And proposal.json, bbox.json and mask.json "
-            "will be detected by default.")
-        json_eval_results(
-            cfg.metric,
-            json_directory=FLAGS.output_eval,
-            dataset=cfg['EvalDataset'])
-        return
 
     # init parallel environment if nranks > 1
     init_parallel_env()
@@ -114,7 +99,6 @@ def main():
     cfg['classwise'] = True if FLAGS.classwise else False
     cfg['output_eval'] = FLAGS.output_eval
     cfg['save_prediction_only'] = FLAGS.save_prediction_only
-    merge_config(FLAGS.opt)
 
     # disable npu in config by default
     if 'use_npu' not in cfg:

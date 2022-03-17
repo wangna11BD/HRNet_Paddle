@@ -31,15 +31,13 @@ import tarfile
 import zipfile
 
 from paddle.utils.download import _get_unique_endpoints
-from .workspace import BASE_KEY
 from .logger import setup_logger
-from .voc_utils import create_list
 
 logger = setup_logger(__name__)
 
 __all__ = [
     'get_weights_path', 'get_dataset_path', 'get_config_path',
-    'download_dataset', 'create_voc_list'
+    'download_dataset',
 ]
 
 WEIGHTS_HOME = osp.expanduser("~/.cache/paddle/weights")
@@ -60,49 +58,6 @@ DATASETS = {
             'http://images.cocodataset.org/annotations/annotations_trainval2017.zip',
             'f4bbac642086de4f52a3fdda2de5fa2c', ),
     ], ["annotations", "train2017", "val2017"]),
-    'voc': ([
-        (
-            'http://host.robots.ox.ac.uk/pascal/VOC/voc2012/VOCtrainval_11-May-2012.tar',
-            '6cd6e144f989b92b3379bac3b3de84fd', ),
-        (
-            'http://host.robots.ox.ac.uk/pascal/VOC/voc2007/VOCtrainval_06-Nov-2007.tar',
-            'c52e279531787c972589f7e41ab4ae64', ),
-        (
-            'http://host.robots.ox.ac.uk/pascal/VOC/voc2007/VOCtest_06-Nov-2007.tar',
-            'b6e924de25625d8de591ea690078ad9f', ),
-        (
-            'https://paddledet.bj.bcebos.com/data/label_list.txt',
-            '5ae5d62183cfb6f6d3ac109359d06a1b', ),
-    ], ["VOCdevkit/VOC2012", "VOCdevkit/VOC2007"]),
-    'wider_face': ([
-        (
-            'https://dataset.bj.bcebos.com/wider_face/WIDER_train.zip',
-            '3fedf70df600953d25982bcd13d91ba2', ),
-        (
-            'https://dataset.bj.bcebos.com/wider_face/WIDER_val.zip',
-            'dfa7d7e790efa35df3788964cf0bbaea', ),
-        (
-            'https://dataset.bj.bcebos.com/wider_face/wider_face_split.zip',
-            'a4a898d6193db4b9ef3260a68bad0dc7', ),
-    ], ["WIDER_train", "WIDER_val", "wider_face_split"]),
-    'fruit': ([(
-        'https://dataset.bj.bcebos.com/PaddleDetection_demo/fruit.tar',
-        'baa8806617a54ccf3685fa7153388ae6', ), ],
-              ['Annotations', 'JPEGImages']),
-    'roadsign_voc': ([(
-        'https://paddlemodels.bj.bcebos.com/object_detection/roadsign_voc.tar',
-        '8d629c0f880dd8b48de9aeff44bf1f3e', ), ], ['annotations', 'images']),
-    'roadsign_coco': ([(
-        'https://paddlemodels.bj.bcebos.com/object_detection/roadsign_coco.tar',
-        '49ce5a9b5ad0d6266163cd01de4b018e', ), ], ['annotations', 'images']),
-    'spine_coco': ([(
-        'https://paddledet.bj.bcebos.com/data/spine_coco.tar',
-        '7ed69ae73f842cd2a8cf4f58dc3c5535', ), ], ['annotations', 'images']),
-    'mot': (),
-    'objects365': (),
-    'coco_ce': ([(
-        'https://paddledet.bj.bcebos.com/data/coco_ce.tar',
-        'eadd1b79bc2f069f2744b1dd4e0c0329', ), ], [])
 }
 
 DOWNLOAD_RETRY_LIMIT = 3
@@ -227,19 +182,6 @@ def get_dataset_path(path, annotation, image_dir):
         "'{}' for automaticly downloading, which only supports "
         "'voc' , 'coco', 'wider_face', 'fruit', 'roadsign_voc' and 'mot' currently".
         format(path, osp.split(path)[-1]))
-
-
-def create_voc_list(data_dir, devkit_subdir='VOCdevkit'):
-    logger.debug("Create voc file list...")
-    devkit_dir = osp.join(data_dir, devkit_subdir)
-    years = ['2007', '2012']
-
-    # NOTE: since using auto download VOC
-    # dataset, VOC default label list should be used, 
-    # do not generate label_list.txt here. For default
-    # label, see ../data/source/voc.py
-    create_list(devkit_dir, years, data_dir)
-    logger.debug("Create voc file list finished")
 
 
 def map_path(url, root_dir, path_depth=1):

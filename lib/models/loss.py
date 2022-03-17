@@ -59,9 +59,8 @@ class KeyPointMSELoss(nn.Layer):
             else:
                 loss += self.loss_scale * self.criterion(heatmap_pred,
                                                          heatmap_gt)
-        keypoint_losses = dict()
-        keypoint_losses['loss'] = loss / num_joints
-        return keypoint_losses
+        loss = loss / num_joints
+        return loss
 
 @register
 @serializable
@@ -102,21 +101,25 @@ class DistDMLLoss(nn.Layer):
 @register
 @serializable
 class DistMSELoss(nn.Layer):
-    def __init__(self, use_target_weight=True, loss_scale=0.5):
+    def __init__(self, use_target_weight=True, loss_scale=0.5, key=None, weight=1.0):
         super().__init__()
         self.criterion = nn.MSELoss(reduction='mean')
         self.use_target_weight = use_target_weight
         self.loss_scale = loss_scale
+        self.key = key
+        self.weight = weight
 
-    def forward(self, output_dict, records):
-        output = output_dict["student_out"]
-        target = output_dict["teacher_out"]
+    def forward(self, student_out, teacher_out, records):
+        if self.key is not None:
+            student_out = student_out[self.key]
+            teacher_out = teacher_out[self.key]
+        
         target_weight = records['target_weight']
-        batch_size = output.shape[0]
-        num_joints = output.shape[1]
-        heatmaps_pred = output.reshape(
+        batch_size = student_out.shape[0]
+        num_joints = student_out.shape[1]
+        heatmaps_pred = student_out.reshape(
             (batch_size, num_joints, -1)).split(num_joints, 1)
-        heatmaps_gt = target.reshape(
+        heatmaps_gt = teacher_out.reshape(
             (batch_size, num_joints, -1)).split(num_joints, 1)
         loss = 0
         for idx in range(num_joints):
@@ -129,6 +132,5 @@ class DistMSELoss(nn.Layer):
             else:
                 loss += self.loss_scale * self.criterion(heatmap_pred,
                                                          heatmap_gt)
-        keypoint_losses = dict()
-        keypoint_losses['loss'] = loss / num_joints
-        return keypoint_losses
+        loss = loss / num_joints * self.weight
+        return loss

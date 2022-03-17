@@ -29,7 +29,7 @@ warnings.filterwarnings('ignore')
 import glob
 
 import paddle
-from lib.utils.workspace import load_config, merge_config
+from lib.utils.workspace import load_config
 from lib.core.trainer import Trainer
 from lib.utils.check import check_gpu, check_npu, check_version, check_config
 from lib.utils.cli import ArgsParser
@@ -137,7 +137,6 @@ def main():
     cfg = load_config(FLAGS.config)
     cfg['use_vdl'] = FLAGS.use_vdl
     cfg['vdl_log_dir'] = FLAGS.vdl_log_dir
-    merge_config(FLAGS.opt)
 
     # disable npu in config by default
     if 'use_npu' not in cfg:

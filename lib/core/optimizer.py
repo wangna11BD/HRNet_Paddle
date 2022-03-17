@@ -161,6 +161,9 @@ class OptimizerBuilder():
         self.optimizer = optimizer
 
     def __call__(self, learning_rate, model=None):
+        if not isinstance(model, (list, tuple)):
+            model = [model]
+        
         if self.clip_grad_by_norm is not None:
             grad_clip = nn.ClipGradByGlobalNorm(
                 clip_norm=self.clip_grad_by_norm)
@@ -176,92 +179,15 @@ class OptimizerBuilder():
         optim_args = self.optimizer.copy()
         optim_type = optim_args['type']
         del optim_args['type']
-        if optim_type != 'AdamW':
-            optim_args['weight_decay'] = regularization
+        optim_args['weight_decay'] = regularization
         op = getattr(optimizer, optim_type)
 
-        if 'without_weight_decay_params' in optim_args:
-            keys = optim_args['without_weight_decay_params']
-            params = [{
-                'params': [
-                    p for n, p in model.named_parameters()
-                    if any([k in n for k in keys])
-                ],
-                'weight_decay': 0.
-            }, {
-                'params': [
-                    p for n, p in model.named_parameters()
-                    if all([k not in n for k in keys])
-                ]
-            }]
-            del optim_args['without_weight_decay_params']
-        else:
-            params = model.parameters()
+        params = []
+        for m in model:
+            if m is not None:
+                params.extend(m.parameters())
 
         return op(learning_rate=learning_rate,
                   parameters=params,
                   grad_clip=grad_clip,
                   **optim_args)
-
-class ModelEMA(object):
-    """
-    Exponential Weighted Average for Deep Neutal Networks
-    Args:
-        model (nn.Layer): Detector of model.
-        decay (int):  The decay used for updating ema parameter.
-            Ema's parameter are updated with the formula:
-           `ema_param = decay * ema_param + (1 - decay) * cur_param`.
-            Defaults is 0.9998.
-        use_thres_step (bool): Whether set decay by thres_step or not 
-        cycle_epoch (int): The epoch of interval to reset ema_param and 
-            step. Defaults is -1, which means not reset. Its function is to
-            add a regular effect to ema, which is set according to experience 
-            and is effective when the total training epoch is large.
-    """
-
-    def __init__(self,
-                 model,
-                 decay=0.9998,
-                 use_thres_step=False,
-                 cycle_epoch=-1):
-        self.step = 0
-        self.epoch = 0
-        self.decay = decay
-        self.state_dict = dict()
-        for k, v in model.state_dict().items():
-            self.state_dict[k] = paddle.zeros_like(v)
-        self.use_thres_step = use_thres_step
-        self.cycle_epoch = cycle_epoch
-
-    def reset(self):
-        self.step = 0
-        self.epoch = 0
-        for k, v in self.state_dict.items():
-            self.state_dict[k] = paddle.zeros_like(v)
-
-    def update(self, model):
-        if self.use_thres_step:
-            decay = min(self.decay, (1 + self.step) / (10 + self.step))
-        else:
-            decay = self.decay
-        self._decay = decay
-        model_dict = model.state_dict()
-        for k, v in self.state_dict.items():
-            v = decay * v + (1 - decay) * model_dict[k]
-            v.stop_gradient = True
-            self.state_dict[k] = v
-        self.step += 1
-
-    def apply(self):
-        if self.step == 0:
-            return self.state_dict
-        state_dict = dict()
-        for k, v in self.state_dict.items():
-            v = v / (1 - self._decay**self.step)
-            v.stop_gradient = True
-            state_dict[k] = v
-        self.epoch += 1
-        if self.cycle_epoch > 0 and self.epoch == self.cycle_epoch:
-            self.reset()
-
-        return state_dict

@@ -149,11 +149,16 @@ class TopDownHRNet(BaseArch):
         return {'backbone': backbone, }
 
     def _forward(self):
+        output = dict()
         feats = self.backbone(self.inputs)
+        output["feats"] = feats
         hrnet_outputs = self.final_conv(feats[0])
+        output["output"] = hrnet_outputs
 
         if self.training:
-            return self.loss(hrnet_outputs, self.inputs)
+            loss = self.loss(hrnet_outputs, self.inputs)
+            output["loss"] = loss
+            return output
         elif self.deploy:
             outshape = hrnet_outputs.shape
             max_idx = paddle.argmax(

@@ -55,7 +55,7 @@ class SchemaValue(object):
 
 class SchemaDict(dict):
     def __init__(self, **kwargs):
-        super(SchemaDict, self).__init__()
+        super().__init__()
         self.schema = {}
         self.strict = False
         self.doc = ""
@@ -67,7 +67,7 @@ class SchemaDict(dict):
                                                                   SchemaDict):
             self[key].update(value)
         else:
-            super(SchemaDict, self).__setitem__(key, value)
+            super().__setitem__(key, value)
 
     def __missing__(self, key):
         if self.has_default(key):
