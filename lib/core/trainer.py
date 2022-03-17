@@ -424,8 +424,14 @@ class Trainer(object):
             save_dir)
 
         # save model
-        paddle.jit.save(
+        if 'slim' not in self.cfg:
+            paddle.jit.save(
                 static_model,
+                os.path.join(save_dir, 'model'),
+                input_spec=pruned_input_spec)
+        else:
+            self.cfg.slim.save_quantized_model(
+                self.model,
                 os.path.join(save_dir, 'model'),
                 input_spec=pruned_input_spec)
         logger.info("Export model and saved in {}".format(save_dir))

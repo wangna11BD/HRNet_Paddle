@@ -39,6 +39,7 @@ from lib.utils.check import check_config, check_gpu, check_version
 from lib.core.trainer import Trainer
 from lib.utils.workspace import create
 from lib.models.loss import DistMSELoss
+from lib.slim import build_slim_model
 
 logger = setup_logger('train')
 
@@ -137,6 +138,9 @@ def main():
         paddle.set_device('gpu')
     else:
         paddle.set_device('cpu')
+
+    if 'slim' in cfg:
+        cfg = build_slim_model(cfg)
 
     check_config(cfg)
     check_gpu(cfg.use_gpu)

@@ -1,0 +1,29 @@
+_BASE_ : [
+  'lite_hrnet_30_256x192_coco.yml'
+]
+
+pretrain_weights: https://bj.bcebos.com/v1/paddledet/models/keypoint/lite_hrnet_30_256x192_coco.pdparams
+slim: QAT
+
+QAT:
+  quant_config: {
+    'activation_preprocess_type': 'PACT',
+    'weight_quantize_type': 'channel_wise_abs_max', 'activation_quantize_type': 'moving_average_abs_max',
+    'weight_bits': 8, 'activation_bits': 8, 'dtype': 'int8', 'window_size': 10000, 'moving_rate': 0.9,
+    'quantizable_layer_type': ['Conv2D', 'Linear']}
+  print_model: True
+
+TrainReader:
+  batch_size: 32
+
+epoch: 50
+#####optimizer
+LearningRate:
+  base_lr: 0.001
+  schedulers:
+  - !PiecewiseDecay
+    milestones: [40, 45]
+    gamma: 0.1
+  - !LinearWarmup
+    start_factor: 0.001
+    steps: 500
