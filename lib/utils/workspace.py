@@ -67,36 +67,7 @@ class AttrDict(dict):
             return self[key]
         raise AttributeError("object has no attribute '{}'".format(key))
 
-
 global_config = AttrDict()
-
-BASE_KEY = '_BASE_'
-
-
-# parse and load _BASE_ recursively
-def _load_config_with_base(file_path):
-    with open(file_path) as f:
-        file_cfg = yaml.load(f, Loader=yaml.Loader)
-
-    # NOTE: cfgs outside have higher priority than cfgs in _BASE_
-    if BASE_KEY in file_cfg:
-        all_base_cfg = AttrDict()
-        base_ymls = list(file_cfg[BASE_KEY])
-        for base_yml in base_ymls:
-            if base_yml.startswith("~"):
-                base_yml = os.path.expanduser(base_yml)
-            if not base_yml.startswith('/'):
-                base_yml = os.path.join(os.path.dirname(file_path), base_yml)
-
-            with open(base_yml) as f:
-                base_cfg = _load_config_with_base(base_yml)
-                all_base_cfg = merge_config(base_cfg, all_base_cfg)
-
-        del file_cfg[BASE_KEY]
-        return merge_config(file_cfg, all_base_cfg)
-
-    return file_cfg
-
 
 def load_config(file_path):
     """
@@ -111,11 +82,12 @@ def load_config(file_path):
     assert ext in ['.yml', '.yaml'], "only support yaml files for now"
 
     # load config from file and merge into global config
-    cfg = _load_config_with_base(file_path)
+    with open(file_path) as f:
+        cfg = yaml.load(f, Loader=yaml.Loader)
     cfg['filename'] = os.path.splitext(os.path.split(file_path)[-1])[0]
     merge_config(cfg)
-
     return global_config
+        
 
 
 def dict_merge(dct, merge_dct):

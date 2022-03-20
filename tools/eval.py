@@ -30,7 +30,8 @@ warnings.filterwarnings('ignore')
 import paddle
 
 from lib.utils.workspace import load_config, merge_config
-from lib.utils.check import check_gpu, check_npu, check_version, check_config
+from lib.utils.check import check_gpu, check_version, check_config
+from lib.slim import build_slim_model
 from lib.utils.cli import ArgsParser
 from lib.core.trainer import Trainer
 from lib.utils.env import init_parallel_env
@@ -47,51 +48,13 @@ def parse_args():
         default=None,
         type=str,
         help="Evaluation directory, default is current directory.")
-
-    parser.add_argument(
-        '--json_eval',
-        action='store_true',
-        default=False,
-        help='Whether to re eval with already exists bbox.json or mask.json')
-
-    parser.add_argument(
-        "--slim_config",
-        default=None,
-        type=str,
-        help="Configuration file of slim method.")
-
-    # TODO: bias should be unified
-    parser.add_argument(
-        "--bias",
-        action="store_true",
-        help="whether add bias or not while getting w and h")
-
-    parser.add_argument(
-        "--classwise",
-        action="store_true",
-        help="whether per-category AP and draw P-R Curve or not.")
-
-    parser.add_argument(
-        '--save_prediction_only',
-        action='store_true',
-        default=False,
-        help='Whether to save the evaluation results only')
+    
 
     args = parser.parse_args()
     return args
 
 
 def run(FLAGS, cfg):
-    if FLAGS.json_eval:
-        logger.info(
-            "In json_eval mode, PaddleDetection will evaluate json files in "
-            "output_eval directly. And proposal.json, bbox.json and mask.json "
-            "will be detected by default.")
-        json_eval_results(
-            cfg.metric,
-            json_directory=FLAGS.output_eval,
-            dataset=cfg['EvalDataset'])
-        return
 
     # init parallel environment if nranks > 1
     init_parallel_env()
@@ -109,33 +72,19 @@ def run(FLAGS, cfg):
 def main():
     FLAGS = parse_args()
     cfg = load_config(FLAGS.config)
-    # TODO: bias should be unified
-    cfg['bias'] = 1 if FLAGS.bias else 0
-    cfg['classwise'] = True if FLAGS.classwise else False
     cfg['output_eval'] = FLAGS.output_eval
-    cfg['save_prediction_only'] = FLAGS.save_prediction_only
     merge_config(FLAGS.opt)
 
-    # disable npu in config by default
-    if 'use_npu' not in cfg:
-        cfg.use_npu = False
-
     if cfg.use_gpu:
-        place = paddle.set_device('gpu')
-    elif cfg.use_npu:
-        place = paddle.set_device('npu')
+        paddle.set_device('gpu')
     else:
-        place = paddle.set_device('cpu')
-
-    if 'norm_type' in cfg and cfg['norm_type'] == 'sync_bn' and not cfg.use_gpu:
-        cfg['norm_type'] = 'bn'
+        paddle.set_device('cpu')
 
     if 'slim' in cfg:
         cfg = build_slim_model(cfg, mode='eval')
 
     check_config(cfg)
     check_gpu(cfg.use_gpu)
-    check_npu(cfg.use_npu)
     check_version()
 
     run(FLAGS, cfg)

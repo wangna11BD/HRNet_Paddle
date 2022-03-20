@@ -28,9 +28,8 @@ from ..utils.workspace import register, create
 __all__ = ['TopDownHRNet']
 
 class BaseArch(nn.Layer):
-    def __init__(self, data_format='NCHW'):
+    def __init__(self):
         super(BaseArch, self).__init__()
-        self.data_format = data_format
         self.inputs = {}
         self.fuse_norm = False
 
@@ -48,15 +47,8 @@ class BaseArch(nn.Layer):
                 if item['NormalizeImage'].get('is_scale', True):
                     self.scale = 1. / 255.
                 break
-        if self.data_format == 'NHWC':
-            self.mean = self.mean.reshape(1, 1, 1, 3)
-            self.std = self.std.reshape(1, 1, 1, 3)
 
     def forward(self, inputs):
-        if self.data_format == 'NHWC':
-            image = inputs['image']
-            inputs['image'] = paddle.transpose(image, [0, 2, 3, 1])
-
         if self.fuse_norm:
             image = inputs['image']
             self.inputs['image'] = (image * self.scale - self.mean) / self.std
@@ -157,11 +149,16 @@ class TopDownHRNet(BaseArch):
         return {'backbone': backbone, }
 
     def _forward(self):
+        output = dict()
         feats = self.backbone(self.inputs)
+        output["feats"] = feats
         hrnet_outputs = self.final_conv(feats[0])
+        output["output"] = hrnet_outputs
 
         if self.training:
-            return self.loss(hrnet_outputs, self.inputs)
+            loss = self.loss(hrnet_outputs, self.inputs)
+            output["loss"] = loss
+            return output
         elif self.deploy:
             outshape = hrnet_outputs.shape
             max_idx = paddle.argmax(

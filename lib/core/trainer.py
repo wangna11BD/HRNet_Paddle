@@ -30,7 +30,6 @@ import paddle.distributed as dist
 from paddle.distributed import fleet
 from paddle import amp
 from paddle.static import InputSpec
-from lib.core.optimizer import ModelEMA
 
 from lib.utils.workspace import create
 from lib.utils.checkpoint import load_weight, load_pretrain_weight
@@ -44,7 +43,7 @@ from .callbacks import Callback, ComposeCallback, LogPrinter, Checkpointer, Visu
 from .export_utils import _dump_infer_config, _prune_input_spec
 
 from lib.utils.logger import setup_logger
-logger = setup_logger('ppdet.engine')
+logger = setup_logger('hrnet.pose')
 
 __all__ = ['Trainer']
 
@@ -55,7 +54,10 @@ class Trainer(object):
                 "mode should be 'train', 'eval' or 'test'"
         self.mode = mode.lower()
         self.optimizer = None
-        self.is_loaded_weights = False
+
+        # init distillation config
+        self.distill_model = None
+        self.distill_loss = None
 
         # build data loader
         self.dataset = cfg['{}Dataset'.format(self.mode.capitalize())]
@@ -64,44 +66,18 @@ class Trainer(object):
             self.loader = create('{}Reader'.format(self.mode.capitalize()))(
                 self.dataset, cfg.worker_num)
 
-        # build model
-        if 'model' not in self.cfg:
-            self.model = create(cfg.architecture)
-        else:
-            self.model = self.cfg.model
-            self.is_loaded_weights = True
+        self.model = create(cfg.architecture)
 
         #normalize params for deploy
         self.model.load_meanstd(cfg['TestReader']['sample_transforms'])
 
-        self.use_ema = ('use_ema' in cfg and cfg['use_ema'])
-        if self.use_ema:
-            ema_decay = self.cfg.get('ema_decay', 0.9998)
-            cycle_epoch = self.cfg.get('cycle_epoch', -1)
-            self.ema = ModelEMA(
-                self.model,
-                decay=ema_decay,
-                use_thres_step=True,
-                cycle_epoch=cycle_epoch)
-
         # EvalDataset build with BatchSampler to evaluate in single device
-        # TODO: multi-device evaluate
         if self.mode == 'eval':
             self._eval_batch_sampler = paddle.io.BatchSampler(
                 self.dataset, batch_size=self.cfg.EvalReader['batch_size'])
             self.loader = create('{}Reader'.format(self.mode.capitalize()))(
                 self.dataset, cfg.worker_num, self._eval_batch_sampler)
         # TestDataset build after user set images, skip loader creation here
-
-        # build optimizer in train mode
-        if self.mode == 'train':
-            steps_per_epoch = len(self.loader)
-            self.lr = create('LearningRate')(steps_per_epoch)
-            self.optimizer = create('OptimizerBuilder')(self.lr, self.model)
-
-        if self.cfg.get('unstructured_prune'):
-            self.pruner = create('UnstructuredPruner')(self.model,
-                                                       steps_per_epoch)
 
         self._nranks = dist.get_world_size()
         self._local_rank = dist.get_rank()
@@ -138,7 +114,6 @@ class Trainer(object):
         if self.mode == 'test' or (self.mode == 'train' and not validate):
             self._metrics = []
             return
-        classwise = self.cfg['classwise'] if 'classwise' in self.cfg else False
         if self.cfg.metric == 'KeyPointTopDownCOCOEval':
             eval_dataset = self.cfg['EvalDataset']
             eval_dataset.check_or_download_dataset()
@@ -156,6 +131,13 @@ class Trainer(object):
             logger.warning("Metric not support for metric type {}".format(
                 self.cfg.metric))
             self._metrics = []
+    
+    def init_optimizer(self, ):
+        # build optimizer in train mode
+        if self.mode == 'train':
+            steps_per_epoch = len(self.loader)
+            self.lr = create('LearningRate')(steps_per_epoch)
+            self.optimizer = create('OptimizerBuilder')(self.lr, [self.model, self.distill_model])
 
     def _reset_metrics(self):
         for metric in self._metrics:
@@ -173,47 +155,21 @@ class Trainer(object):
         metrics = [m for m in list(metrics) if m is not None]
         self._metrics.extend(metrics)
 
-    def load_weights(self, weights):
-        if self.is_loaded_weights:
-            return
+    def load_weights(self, weights, model=None):
         self.start_epoch = 0
+        if model is None:
+            model = self.model
         load_pretrain_weight(self.model, weights)
         logger.debug("Load weights {} to start training".format(weights))
-
-    def load_weights_sde(self, det_weights, reid_weights):
-        if self.model.detector:
-            load_weight(self.model.detector, det_weights)
-            load_weight(self.model.reid, reid_weights)
-        else:
-            load_weight(self.model.reid, reid_weights)
-
-    def resume_weights(self, weights):
-        # support Distill resume weights
-        if hasattr(self.model, 'student_model'):
-            self.start_epoch = load_weight(self.model.student_model, weights,
-                                           self.optimizer)
-        else:
-            self.start_epoch = load_weight(self.model, weights, self.optimizer)
-        logger.debug("Resume weights of epoch {}".format(self.start_epoch))
 
     def train(self, validate=False):
         assert self.mode == 'train', "Model not in 'train' mode"
         Init_mark = False
 
         model = self.model
-        if self.cfg.get('fleet', False):
-            model = fleet.distributed_model(model)
-            self.optimizer = fleet.distributed_optimizer(self.optimizer)
-        elif self._nranks > 1:
-            find_unused_parameters = self.cfg[
-                'find_unused_parameters'] if 'find_unused_parameters' in self.cfg else False
+        if self._nranks > 1:
             model = paddle.DataParallel(
-                self.model, find_unused_parameters=find_unused_parameters)
-
-        # initial fp16
-        if self.cfg.get('fp16', False):
-            scaler = amp.GradScaler(
-                enable=self.cfg.use_gpu, init_loss_scaling=1024)
+                self.model, find_unused_parameters=self.cfg.get("find_unused_parameters", False))
 
         self.status.update({
             'epoch_id': self.start_epoch,
@@ -227,11 +183,6 @@ class Trainer(object):
             self.cfg.log_iter, fmt='{avg:.4f}')
         self.status['training_staus'] = stats.TrainingStats(self.cfg.log_iter)
 
-        if self.cfg.get('print_flops', False):
-            flops_loader = create('{}Reader'.format(self.mode.capitalize()))(
-                self.dataset, self.cfg.worker_num)
-            self._flops(flops_loader)
-        
         self._compose_callback.on_train_begin(self.status)
 
         for epoch_id in range(self.start_epoch, self.cfg.epoch):
@@ -246,53 +197,44 @@ class Trainer(object):
                 self.status['step_id'] = step_id
                 self._compose_callback.on_step_begin(self.status)
                 data['epoch_id'] = epoch_id
-
-                if self.cfg.get('fp16', False):
-                    with amp.auto_cast(enable=self.cfg.use_gpu):
-                        # model forward
-                        outputs = model(data)
-                        loss = outputs['loss']
-
-                    # model backward
-                    scaled_loss = scaler.scale(loss)
-                    scaled_loss.backward()
-                    # in dygraph mode, optimizer.minimize is equal to optimizer.step
-                    scaler.minimize(self.optimizer, scaled_loss)
+                
+                # model forward
+                outputs = model(data)
+                if self.distill_model is not None:
+                    teacher_outputs = self.distill_model(data)
+                    distill_loss = self.distill_loss(outputs, teacher_outputs, data)
+                    loss = outputs['loss'] + teacher_outputs["loss"] + distill_loss
                 else:
-                    # model forward
-                    outputs = model(data)
                     loss = outputs['loss']
-                    # model backward
-                    loss.backward()
-                    self.optimizer.step()
+                # model backward
+                loss.backward()
+                self.optimizer.step()
                 curr_lr = self.optimizer.get_lr()
                 self.lr.step()
-                if self.cfg.get('unstructured_prune'):
-                    self.pruner.step()
                 self.optimizer.clear_grad()
                 self.status['learning_rate'] = curr_lr
 
                 if self._nranks < 2 or self._local_rank == 0:
-                    self.status['training_staus'].update(outputs)
+                    loss_dict = {"loss": outputs['loss']}
+                    if self.distill_model is not None:
+                        loss_dict.update({
+                            "loss_student": outputs['loss'],
+                            "loss_teacher": teacher_outputs["loss"],
+                            "loss_distill": distill_loss,
+                            "loss": loss
+                        })
+                    self.status['training_staus'].update(loss_dict)
 
                 self.status['batch_time'].update(time.time() - iter_tic)
                 self._compose_callback.on_step_end(self.status)
-                if self.use_ema:
-                    self.ema.update(self.model)
                 iter_tic = time.time()
-
-            # apply ema weight on model
-            if self.use_ema:
-                weight = copy.deepcopy(self.model.state_dict())
-                self.model.set_dict(self.ema.apply())
-            if self.cfg.get('unstructured_prune'):
-                self.pruner.update_params()
 
             self._compose_callback.on_epoch_end(self.status)
 
-            if validate and (self._nranks < 2 or self._local_rank == 0) \
+            if validate and self._local_rank == 0 \
                     and ((epoch_id + 1) % self.cfg.snapshot_epoch == 0 \
                              or epoch_id == self.end_epoch - 1):
+                print("begin to eval...")
                 if not hasattr(self, '_eval_loader'):
                     # build evaluation dataset and loader
                     self._eval_dataset = self.cfg.EvalDataset
@@ -314,10 +256,6 @@ class Trainer(object):
                     self.status['save_best_model'] = True
                     self._eval_with_loader(self._eval_loader)
 
-            # restore origin weight on model
-            if self.use_ema:
-                self.model.set_dict(weight)
-
         self._compose_callback.on_train_end(self.status)
 
     def _eval_with_loader(self, loader):
@@ -326,10 +264,6 @@ class Trainer(object):
         self._compose_callback.on_epoch_begin(self.status)
         self.status['mode'] = 'eval'
         self.model.eval()
-        if self.cfg.get('print_flops', False):
-            flops_loader = create('{}Reader'.format(self.mode.capitalize()))(
-                self.dataset, self.cfg.worker_num, self._eval_batch_sampler)
-            self._flops(flops_loader)
         for step_id, data in enumerate(loader):
             self.status['step_id'] = step_id
             self._compose_callback.on_step_begin(self.status)
@@ -375,9 +309,6 @@ class Trainer(object):
         # Run Infer 
         self.status['mode'] = 'test'
         self.model.eval()
-        if self.cfg.get('print_flops', False):
-            flops_loader = create('TestReader')(self.dataset, 0)
-            self._flops(flops_loader)
         results = []
         for step_id, data in enumerate(loader):
             self.status['step_id'] = step_id
@@ -440,7 +371,7 @@ class Trainer(object):
         return os.path.join(output_dir, "{}".format(name)) + ext
 
     def _get_infer_cfg_and_input_spec(self, save_dir, prune_input=True):
-        image_shape = None
+        image_shape = [3, -1, -1]
         im_shape = [None, 2]
         scale_factor = [None, 2]
         test_reader_name = 'TestReader'
@@ -448,20 +379,11 @@ class Trainer(object):
             inputs_def = self.cfg[test_reader_name]['inputs_def']
             image_shape = inputs_def.get('image_shape', None)
         # set image_shape=[None, 3, -1, -1] as default
-        if image_shape is None:
-            image_shape = [None, 3, -1, -1]
 
-        if len(image_shape) == 3:
-            image_shape = [None] + image_shape
-        else:
-            im_shape = [image_shape[0], 2]
-            scale_factor = [image_shape[0], 2]
+        image_shape = [None] + image_shape
 
         if hasattr(self.model, 'deploy'):
             self.model.deploy = True
-        if hasattr(self.model, 'fuse_norm'):
-            self.model.fuse_norm = self.cfg['TestReader'].get('fuse_normalize',
-                                                              False)
 
         # Save infer cfg
         _dump_infer_config(self.cfg,
@@ -513,49 +435,3 @@ class Trainer(object):
                 os.path.join(save_dir, 'model'),
                 input_spec=pruned_input_spec)
         logger.info("Export model and saved in {}".format(save_dir))
-
-    def post_quant(self, output_dir='output_inference'):
-        model_name = os.path.splitext(os.path.split(self.cfg.filename)[-1])[0]
-        save_dir = os.path.join(output_dir, model_name)
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-
-        for idx, data in enumerate(self.loader):
-            self.model(data)
-            if idx == int(self.cfg.get('quant_batch_num', 10)):
-                break
-
-        # TODO: support prune input_spec
-        _, pruned_input_spec = self._get_infer_cfg_and_input_spec(
-            save_dir, prune_input=False)
-
-        self.cfg.slim.save_quantized_model(
-            self.model,
-            os.path.join(save_dir, 'model'),
-            input_spec=pruned_input_spec)
-        logger.info("Export Post-Quant model and saved in {}".format(save_dir))
-
-    def _flops(self, loader):
-        self.model.eval()
-        try:
-            import paddleslim
-        except Exception as e:
-            logger.warning(
-                'Unable to calculate flops, please install paddleslim, for example: `pip install paddleslim`'
-            )
-            return
-
-        from paddleslim.analysis import dygraph_flops as flops
-        input_data = None
-        for data in loader:
-            input_data = data
-            break
-
-        input_spec = [{
-            "image": input_data['image'][0].unsqueeze(0),
-            "im_shape": input_data['im_shape'][0].unsqueeze(0),
-            "scale_factor": input_data['scale_factor'][0].unsqueeze(0)
-        }]
-        flops = flops(self.model, input_spec) / (1000**3)
-        logger.info(" Model FLOPs : {:.6f}G. (image shape is {})".format(
-            flops, input_data['image'][0].unsqueeze(0).shape))
