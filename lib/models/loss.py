@@ -64,42 +64,6 @@ class KeyPointMSELoss(nn.Layer):
 
 @register
 @serializable
-class DistDMLLoss(nn.Layer):
-    def __init__(self, use_target_weight=True, loss_scale=0.5, act="softmax", eps=1e-12):
-        super().__init__()
-        self.use_target_weight = use_target_weight
-        self.loss_scale = loss_scale
-
-        assert act in ["softmax", "sigmoid", None]
-        if act == "softmax":
-            self.act = nn.Softmax(axis=-1)
-        elif act == "sigmoid":
-            self.act = nn.Sigmoid()
-        else:
-            self.act = None
-        self.eps = eps
-
-    def _kldiv(self, x, target):
-        class_num = x.shape[-1]
-        cost = target * paddle.log(
-            (target + self.eps) / (x + self.eps)) * class_num
-        return cost
-
-    def _forward(self, x, target):
-        if self.act is not None:
-            x = self.act(x)
-            target = self.act(target)
-        loss = self._kldiv(x, target) + self._kldiv(target, x)
-        loss = loss / 2
-        loss = paddle.mean(loss)
-        return loss
-
-    def forward(self, output, records):
-        pass
-
-
-@register
-@serializable
 class DistMSELoss(nn.Layer):
     def __init__(self, use_target_weight=True, loss_scale=0.5, key=None, weight=1.0):
         super().__init__()
