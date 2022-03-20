@@ -43,7 +43,7 @@ from .callbacks import Callback, ComposeCallback, LogPrinter, Checkpointer, Visu
 from .export_utils import _dump_infer_config, _prune_input_spec
 
 from lib.utils.logger import setup_logger
-logger = setup_logger('ppdet.engine')
+logger = setup_logger('hrnet.pose')
 
 __all__ = ['Trainer']
 

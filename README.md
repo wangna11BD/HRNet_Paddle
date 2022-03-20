@@ -118,6 +118,9 @@ python tools/eval.py -c configs/hrnet_w32_256x192.yml -o weights=https://paddled
 # Inference
 python tools/infer.py -c configs/hrnet_w32_256x192.yml --infer_img=dataset/test_image/000000397133.jpg -o weights=https://paddledet.bj.bcebos.com/models/keypoint/hrnet_w32_256x192.pdparams
 
+# training with distillation
+python tools/train.py -c configs/lite_hrnet_30_256x192_coco.yml  --distill_config=./configs/hrnet_w32_256x192_teacher.yml
+
 # training with PACT quantization on single-GPU
 export CUDA_VISIBLE_DEVICES=0
 python tools/train.py -c configs/lite_hrnet_30_256x192_coco_pact.yml
@@ -141,9 +144,11 @@ python tools/infer.py -c configs/lite_hrnet_30_256x192_coco_pact.yml
 COCO Dataset
 | Model              | Input Size | AP(coco val) |                           Model Download                           | Config File                                                    |
 | :---------------- | -------- | :----------: | :----------------------------------------------------------: | ----------------------------------------------------------- |
-| HRNet-w32             | 256x192  |     76.9     | [hrnet_w32_256x192.pdparams](https://paddledet.bj.bcebos.com/models/keypoint/hrnet_w32_256x192.pdparams) | [config](./configs/hrnet_w32_256x192.yml)                     |
-| LiteHRNet-30          | 256x192  |     69.4     | [lite_hrnet_30_256x192_coco.pdparams](https://bj.bcebos.com/v1/paddledet/models/keypoint/lite_hrnet_30_256x192_coco.pdparams) | [config](./configs/lite_hrnet_30_256x192_coco.yml)                     |
-| LiteHRNet-30-PACT         | 256x192  |     68.9     | [lite_hrnet_30_256x192_coco.pdparams](https://bj.bcebos.com/v1/paddledet/models/keypoint/lite_hrnet_30_256x192_coco_pact.pdparams) | [config](./configs/lite_hrnet_30_256x192_coco_pact.yml)                     |
+| HRNet-w32             | 256x192  |     76.9     | [hrnet_w32_256x192.pdparams](https://paddle-model-ecology.bj.bcebos.com/model/hrnet_pose/hrnet_w32_256x192.pdparams) | [config](./configs/hrnet_w32_256x192.yml)                     |
+| LiteHRNet-30          | 256x192  |     69.4     | [lite_hrnet_30_256x192_coco.pdparams](https://paddle-model-ecology.bj.bcebos.com/model/hrnet_pose/lite_hrnet_30_256x192_coco.pdparams) | [config](./configs/lite_hrnet_30_256x192_coco.yml)                     |
+| LiteHRNet-30-PACT         | 256x192  |     68.9     | [lite_hrnet_30_256x192_coco_pact.pdparams](https://paddle-model-ecology.bj.bcebos.com/model/hrnet_pose/lite_hrnet_30_256x192_coco_pact.pdparams) | [config](./configs/lite_hrnet_30_256x192_coco_pact.yml)                     |
+| LiteHRNet-30-PACT         | 256x192  |     69.9     | [lite_hrnet_30_256x192_coco.pdparams](https://paddle-model-ecology.bj.bcebos.com/model/hrnet_pose/lite_hrnet_30_256x192_coco_dist.pdparams) | [config](./configs/lite_hrnet_30_256x192_coco_pact.yml)                     |
+
 
 ![](/dataset/test_image/hrnet_demo.jpg) 
 ![](/deploy/output/hrnet_demo_vis.jpg)

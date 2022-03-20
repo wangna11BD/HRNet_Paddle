@@ -45,7 +45,6 @@ logger = setup_logger('train')
 
 def build_teacher_model(config):
     model = create(config.architecture)
-    # print(model)
     if config.get('pretrain_weights', None):
         load_pretrain_weight(model, config.pretrain_weights)
         logger.debug("Load weights {} to start training".format(config.pretrain_weights))
