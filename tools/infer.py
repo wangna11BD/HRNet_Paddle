@@ -29,9 +29,10 @@ warnings.filterwarnings('ignore')
 import glob
 
 import paddle
-from lib.utils.workspace import load_config
+from lib.utils.workspace import load_config, merge_config
+from lib.slim import build_slim_model
 from lib.core.trainer import Trainer
-from lib.utils.check import check_gpu, check_npu, check_version, check_config
+from lib.utils.check import check_gpu, check_version, check_config
 from lib.utils.cli import ArgsParser
 from lib.utils.logger import setup_logger
 logger = setup_logger('train')
@@ -59,11 +60,6 @@ def parse_args():
         type=float,
         default=0.5,
         help="Threshold to reserve the result for visualization.")
-    parser.add_argument(
-        "--slim_config",
-        default=None,
-        type=str,
-        help="Configuration file of slim method.")
     parser.add_argument(
         "--use_vdl",
         type=bool,
@@ -137,27 +133,18 @@ def main():
     cfg = load_config(FLAGS.config)
     cfg['use_vdl'] = FLAGS.use_vdl
     cfg['vdl_log_dir'] = FLAGS.vdl_log_dir
-
-    # disable npu in config by default
-    if 'use_npu' not in cfg:
-        cfg.use_npu = False
+    merge_config(FLAGS.opt)
 
     if cfg.use_gpu:
-        place = paddle.set_device('gpu')
-    elif cfg.use_npu:
-        place = paddle.set_device('npu')
+        paddle.set_device('gpu')
     else:
-        place = paddle.set_device('cpu')
-
-    if 'norm_type' in cfg and cfg['norm_type'] == 'sync_bn' and not cfg.use_gpu:
-        cfg['norm_type'] = 'bn'
+        paddle.set_device('cpu')
 
     if 'slim' in cfg:
         cfg = build_slim_model(cfg, mode='eval')
 
     check_config(cfg)
     check_gpu(cfg.use_gpu)
-    check_npu(cfg.use_npu)
     check_version()
 
     run(FLAGS, cfg)

@@ -116,7 +116,7 @@ export CUDA_VISIBLE_DEVICES=0
 python tools/eval.py -c configs/hrnet_w32_256x192.yml -o weights=https://paddledet.bj.bcebos.com/models/keypoint/hrnet_w32_256x192.pdparams
 
 # Inference
-python tools/infer.py -c configs/hrnet_w32_256x192.yml --infer_img=dataset/test_image/000000397133.jpg -o weights=https://paddledet.bj.bcebos.com/models/keypoint/hrnet_w32_256x192.pdparams
+python tools/infer.py -c configs/hrnet_w32_256x192.yml --infer_img=dataset/test_image/hrnet_demo.jpg -o weights=https://paddledet.bj.bcebos.com/models/keypoint/hrnet_w32_256x192.pdparams
 
 # training with distillation
 python tools/train.py -c configs/lite_hrnet_30_256x192_coco.yml  --distill_config=./configs/hrnet_w32_256x192_teacher.yml
@@ -135,7 +135,7 @@ python tools/eval.py -c configs/lite_hrnet_30_256x192_coco_pact.yml -o weights=h
 
 # Inference with PACT quantization
 python tools/infer.py -c configs/lite_hrnet_30_256x192_coco_pact.yml
---infer_img=dataset/test_image/000000397133.jpg -o weights=https://paddledet.bj.bcebos.com/models/keypoint/lite_hrnet_30_256x192_coco_pact.pdparams
+--infer_img=dataset/test_image/hrnet_demo.jpg -o weights=https://paddledet.bj.bcebos.com/models/keypoint/lite_hrnet_30_256x192_coco_pact.pdparams
 
 
 ```
